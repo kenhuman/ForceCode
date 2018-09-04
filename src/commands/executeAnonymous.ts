@@ -24,8 +24,7 @@ export default function executeAnonymous(document: vscode.TextDocument): any {
 
     function runDiagnostics(res: ExecuteAnonymousResult, _document: vscode.TextDocument, sel: any) {
         // Create a diagnostic Collection for the current file.  Overwriting the last...
-        var diagnosticCollection: vscode.DiagnosticCollection = vscode.window.forceCode.fcDiagnosticCollection;
-        diagnosticCollection.delete(_document.uri);
+        var diagnosticCollection: vscode.DiagnosticCollection = vscode.languages.createDiagnosticCollection(_document.fileName);
         var diagnostics: vscode.Diagnostic[] = [];
         // var header: any = res.header;
         if (res.compiled === false) {

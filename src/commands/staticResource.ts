@@ -26,7 +26,7 @@ export default function staticResourceBundleDeploy(context: vscode.ExtensionCont
     // =======================================================================================================================================
     function getPackageName(): any {
         let bundleDirectories: any[] = [];
-        let bundlePath: string = vscode.window.forceCode.workspaceRoot + path.sep + 'resource-bundles';
+        let bundlePath: string = vscode.workspace.workspaceFolders[0].uri.fsPath + path.sep + 'resource-bundles';
         if (fs.existsSync(bundlePath)) {
             bundleDirectories = fs.readdirSync(bundlePath).filter(function (file) {
                 return fs.statSync(path.join(bundlePath, file)).isDirectory();
@@ -35,7 +35,7 @@ export default function staticResourceBundleDeploy(context: vscode.ExtensionCont
             });
         }
         let spaDirectories: Array<any> = [];
-        let spaPath: string = vscode.window.forceCode.workspaceRoot + path.sep + 'spa';
+        let spaPath: string = vscode.workspace.workspaceFolders[0].uri.fsPath + path.sep + 'spa';
         if (fs.existsSync(spaPath)) {
             spaDirectories = fs.readdirSync(spaPath).filter(function (file) {
                 return fs.statSync(path.join(spaPath, file)).isDirectory();
@@ -71,7 +71,7 @@ export function staticResourceDeployFromFile(textDocument: vscode.TextDocument, 
         .catch(onError);
     // =======================================================================================================================================
     function getPackageName() {
-        let bundlePath: string = vscode.window.forceCode.workspaceRoot + path.sep + 'resource-bundles' + path.sep;
+        let bundlePath: string = vscode.workspace.workspaceFolders[0].uri.fsPath + path.sep + 'resource-bundles' + path.sep;
         try {
             var resourceName: string = textDocument.fileName.split(bundlePath)[1].split('.resource.')[0];
             var resType: string = textDocument.fileName.split(bundlePath)[1].split('.resource.')[1].split(path.sep)[0].replace('.', '/');
@@ -92,7 +92,7 @@ function onError() {
 
 function bundleAndDeploy(option) {
     let root: string = getPackagePath(option);
-    if(option.detail.includes('zip') || option.detail === 'SPA') {
+    if(option.detail.includes('zip')) {
         let zip: any = zipFiles(getFileList(root), root);
         bundle(zip, option.label);
         return deploy(zip, option.label, option.detail).then(deployComplete);
@@ -104,7 +104,7 @@ function bundleAndDeploy(option) {
 }
 
 function bundleAndDeployAll() {
-    let bundlePath: string = vscode.window.forceCode.workspaceRoot + path.sep + 'resource-bundles';
+    let bundlePath: string = vscode.workspace.workspaceFolders[0].uri.fsPath + path.sep + 'resource-bundles';
     if (fs.existsSync(bundlePath)) {
         return Promise.all(fs.readdirSync(bundlePath).filter(function (file) {
             return fs.statSync(path.join(bundlePath, file)).isDirectory();
@@ -119,16 +119,16 @@ function bundleAndDeployAll() {
 }
 
 function getPackagePath(option) {
-    var bundlePath: string = vscode.window.forceCode.workspaceRoot + path.sep;
+    var bundlePath: string = vscode.workspace.workspaceFolders[0].uri.fsPath;
     // Get package data
     if (option.detail !== 'SPA') {
-        bundlePath += 'resource-bundles' + path.sep + option.label + '.resource.' + option.detail.replace('/', '.');
+        bundlePath = vscode.workspace.workspaceFolders[0].uri.fsPath + path.sep + 'resource-bundles' + path.sep + option.label + '.resource.' + option.detail.replace('/', '.');
     } else {
         let dist: string = vscode.window.forceCode.config.spaDist;
         if (dist) {
-            bundlePath += 'spa' + path.sep + option.label + path.sep + dist;
+            bundlePath = vscode.workspace.workspaceFolders[0].uri.fsPath + path.sep + 'spa' + path.sep + option.label + path.sep + dist;
         } else {
-            bundlePath += 'spa' + path.sep + option.label;
+            bundlePath = vscode.workspace.workspaceFolders[0].uri.fsPath + path.sep + 'spa' + path.sep + option.label;
         }
     }
     return bundlePath;

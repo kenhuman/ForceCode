@@ -8,10 +8,11 @@ import credentials from './credentials';
 import deploy from './deploy';
 import diff from './diff';
 import dx from './dx';
+import dxLogout from './dxLogout';
 import executeAnonymous from './executeAnonymous';
 import find from './find';
 import getLog from './getLog';
-import { open, showFileOptions } from './open';
+import { open, openAura, showFileOptions } from './open';
 import getOverallCoverage from './overallCoverage';
 import retrieve from './retrieve';
 import showMenu from './menu';
@@ -30,10 +31,12 @@ export {
     deploy,
     diff,
     dx,
+    dxLogout,
     executeAnonymous,
     find,
     getLog,
     open,
+    openAura,
     getOverallCoverage,
     retrieve,
     showFileOptions,

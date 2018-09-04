@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 interface Constants {
     APEX_FILTER: vscode.DocumentFilter[];
-    CLIENT_ID: string;
     FORCE_SERVICE: string;
     FORCECODE_KEYCHAIN: string;
     OUTPUT_CHANNEL: string;
@@ -23,7 +22,6 @@ const apexFilter: vscode.DocumentFilter[] = [
 const constants: Constants = {
     FORCECODE_KEYCHAIN: 'yo-force',
     APEX_FILTER: apexFilter,
-    CLIENT_ID: 'SalesforceDevelopmentExperience',
     FORCE_SERVICE: 'forceService',
     OUTPUT_CHANNEL: 'outputChannel',
     OUTPUT_CHANNEL_NAME: 'ForceCode',

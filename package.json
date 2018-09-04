@@ -1,6 +1,6 @@
 {
   "name": "forcecode",
-  "version": "3.8.3",
+  "version": "3.5.5",
   "publisher": "BrettWagner",
   "displayName": "ForceCode",
   "description": "Visual Studio Code extension for Salesforce (SFDC) development",
@@ -9,7 +9,7 @@
   },
   "license": "MIT",
   "engines": {
-    "vscode": "^1.25.0"
+    "vscode": "^1.23.0"
   },
   "icon": "images/new-logo.png",
   "categories": [
@@ -38,11 +38,6 @@
           "when": "ForceCodeActive"
         },
         {
-          "id": "ForceCode.switchUserProvider",
-          "name": "Saved Usernames",
-          "when": "ForceCodeActive"
-        },
-        {
           "id": "ForceCode.treeDataProvider",
           "name": "Running Tasks",
           "when": "ForceCodeActive"
@@ -61,63 +56,75 @@
     "commands": [
       {
         "command": "ForceCode.showMenu",
-        "title": "ForceCode: ForceCode Menu"
+        "title": "ForceCode Menu",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.openOrg",
-        "title": "ForceCode: Open Org In Browser"
+        "title": "Open Org In Browser",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.compile",
-        "title": "ForceCode: Save/Deploy/Compile"
+        "title": "Save/Deploy/Compile",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.refresh",
-        "title": "ForceCode: Refresh from server"
+        "title": "Refresh from server",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.executeAnonymous",
-        "title": "ForceCode: Execute Anonymous"
+        "title": "Execute Anonymous",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.open",
-        "title": "ForceCode: Get Class, Page, or Trigger"
+        "title": "Get Class, Page, or Trigger",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.staticResource",
-        "title": "ForceCode: Bundle / Deploy Static Resource"
+        "title": "Bundle / Deploy Static Resource",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.openFileInOrg",
-        "title": "ForceCode: Open this file in the Org"
+        "title": "Open this file in the Org",
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.toggleCoverage",
-        "title": "ForceCode: Toggle Test Coverage",
+        "title": "Toggle Test Coverage",
         "icon": {
           "light": "./images/coverage.svg",
           "dark": "./images/coverage.svg"
-        }
+        },
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.previewVF",
-        "title": "ForceCode: Preview Visualforce page",
+        "title": "Preview Visualforce page",
         "icon": {
           "light": "./images/logo.svg",
           "dark": "./images/logo.svg"
-        }
+        },
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.previewApp",
-        "title": "ForceCode: Preview Lightning App",
+        "title": "Preview Lightning App",
         "icon": {
           "light": "./images/logo.svg",
           "dark": "./images/logo.svg"
-        }
+        },
+        "category": "ForceCode"
       },
       {
         "command": "ForceCode.diff",
-        "title": "ForceCode: Diff Local <> Remote"
+        "title": "Diff Local <> Remote",
+        "category": "ForceCode"
       }
     ],
     "keybindings": [
@@ -203,12 +210,66 @@
         ]
       },
       {
+        "id": "xml",
+        "extensions": [
+          ".xml",
+          ".layout",
+          ".resource",
+          ".remoteSite",
+          ".labels",
+          ".dashboard",
+          ".permissionset",
+          ".workflow",
+          ".email",
+          ".profile",
+          ".scf",
+          ".queue",
+          ".reportType",
+          ".report",
+          ".weblink",
+          ".tab",
+          ".letter",
+          ".role",
+          ".homePageComponent",
+          ".homePageLayout",
+          ".objectTranslation",
+          ".flow",
+          ".datacategorygroup",
+          ".snapshot",
+          ".site",
+          ".sharingRules",
+          ".settings",
+          ".callCenter",
+          ".community",
+          ".authProvider",
+          ".customApplicationComponent",
+          ".quickAction",
+          ".approvalProcess",
+          ".auradoc",
+          ".cmp",
+          ".evt",
+          ".tokens",
+          ".design",
+          ".object",
+          ".app"
+        ]
+      },
+      {
         "id": "apex",
         "aliases": [
           "Apex"
         ],
         "extensions": [
           ".apex"
+        ]
+      },
+      {
+        "id": "html",
+        "aliases": [
+          "HTML"
+        ],
+        "extensions": [
+          ".html"
         ]
       },
       {
@@ -243,12 +304,32 @@
           "group": "ForceCode"
         },
         {
-          "when": "ForceCodeActive",
+          "when": "resourceLangId == apex && ForceCodeActive",
           "command": "ForceCode.compile",
           "group": "ForceCode"
         },
         {
-          "when": "ForceCodeActive",
+          "when": "resourceLangId == visualforce && ForceCodeActive",
+          "command": "ForceCode.compile",
+          "group": "ForceCode"
+        },
+        {
+          "when": "resourceLangId == xml && ForceCodeActive",
+          "command": "ForceCode.compile",
+          "group": "ForceCode"
+        },
+        {
+          "when": "resourceLangId == apex && ForceCodeActive",
+          "command": "ForceCode.refresh",
+          "group": "ForceCode"
+        },
+        {
+          "when": "resourceLangId == visualforce && ForceCodeActive",
+          "command": "ForceCode.refresh",
+          "group": "ForceCode"
+        },
+        {
+          "when": "resourceLangId == xml && ForceCodeActive",
           "command": "ForceCode.refresh",
           "group": "ForceCode"
         },
@@ -290,18 +371,6 @@
         {
           "when": "resourceLangId == apex && ForceCodeActive",
           "command": "ForceCode.diff",
-          "group": "ForceCode"
-        }
-      ],
-      "explorer/context": [
-        {
-          "when": "ForceCodeActive",
-          "command": "ForceCode.refresh",
-          "group": "ForceCode"
-        },
-        {
-          "when": "ForceCodeActive && !explorerResourceIsFolder",
-          "command": "ForceCode.compile",
           "group": "ForceCode"
         }
       ],
@@ -355,22 +424,27 @@
     "tslint": "tslint -c tslint.json src/**/*.ts",
     "package": "vsce package"
   },
+  "extensionDependencies": [
+    "salesforce.salesforcedx-vscode-apex",
+    "salesforce.salesforcedx-vscode-visualforce",
+    "salesforce.salesforcedx-vscode-lightning"
+  ],
   "dependencies": {
-    "archiver": "^3.0.0",
+    "jsforce-metadata-tools": "^1.3.0",
     "crypto-browserify": "3.12.0",
     "fs-extra": "^7.0.0",
     "globule": "^1.2.1",
-    "jsforce": "1.8.5",
+    "jsforce": "^1.8.5",
     "jszip": "^3.1.5",
-    "klaw": "^3.0.0",
-    "mime-types": "^2.1.20",
+    "klaw": "^2.1.1",
+    "mime-types": "^2.1.19",
     "moment": "^2.22.2",
-    "node-fetch": "^2.2.0",
+    "node-fetch": "^2.1.2",
     "os": "^0.1.1",
     "request-light": "^0.2.3",
-    "salesforce-alm": "^43.12.0",
+    "salesforce-alm": "^43.7.0",
     "util.promisify": "^1.0.0",
-    "vscode": "^1.1.21",
+    "vscode": "^1.1.18",
     "xml2js": "^0.4.19",
     "zip": "^1.2.0"
   },
@@ -378,25 +452,25 @@
     "@types/chai": "^4.1.4",
     "@types/glob": "^5.0.35",
     "@types/mocha": "^5.2.5",
-    "@types/node": "10.9.4",
+    "@types/node": "10.5.2",
     "@types/rimraf": "^2.0.2",
-    "@types/sinon": "^5.0.2",
+    "@types/sinon": "^5.0.1",
     "chai": "^4.1.2",
     "cross-env": "5.2.0",
     "decache": "^4.4.0",
-    "electron-rebuild": "^1.8.2",
-    "glob": "^7.1.3",
+    "electron-rebuild": "^1.8.1",
+    "glob": "^7.1.2",
     "istanbul": "^0.4.5",
     "mocha": "^5.2.0",
-    "mocha-junit-reporter": "^1.18.0",
+    "mocha-junit-reporter": "^1.17.0",
     "mocha-multi-reporters": "^1.1.7",
     "mock-spawn": "0.2.6",
-    "nyc": "^13.0.1",
+    "nyc": "^12.0.2",
     "remap-istanbul": "^0.11.1",
     "rimraf": "^2.6.2",
-    "sinon": "^6.1.5",
-    "source-map-support": "^0.5.9",
-    "typescript": "^3.0.3",
-    "vsce": "^1.47.0"
+    "sinon": "^6.1.3",
+    "source-map-support": "^0.5.6",
+    "typescript": "^2.9.2",
+    "vsce": "^1.44.0"
   }
 }

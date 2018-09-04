@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { QueryResult } from '../services/dxService';
-import { switchUserViewService } from '../services';
 const moment: any = require('moment');
 
 interface LogRecord {
@@ -25,7 +24,7 @@ export default function getLog() {
     function getLast10Logs(): Promise<QueryResult> {
 
         var queryString: string = `SELECT Id, LogLength, Request, Status, DurationMilliseconds, StartTime, Location FROM ApexLog` +
-            ` WHERE LogUserId='${switchUserViewService.orgInfo.userId}'` +
+            ` WHERE LogUserId='${vscode.window.forceCode.dxCommands.orgInfo.userId}'` +
             // ` AND Request = 'API' AND Location = 'SystemLog'` +
             // ` AND Operation like '%executeAnonymous%'`
             ` ORDER BY StartTime DESC, Id DESC LIMIT 10`;

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import jsforce = require('jsforce');
 import { DXCommands} from './services/dxService';
+import { IMetadataFileProperties } from 'jsforce';
 
 declare module 'vscode' {
     export namespace window {
@@ -12,41 +13,31 @@ export interface FCWorkspaceMembers {
     [key: string]: IWorkspaceMember;
 }
 
-export interface FCOrg {
-    username: string;
-    url: string;
-    src?: string;
-}
-
 export interface Config {
     apiVersion?: string;
     autoCompile?: boolean;
     autoRefresh?: boolean;
     browser?: string;
     checkForFileChanges?: boolean;
-    debugFilter?: string;
     debugOnly?: boolean;
+    debugFilter?: string;
     deployOptions?: {
-        checkOnly?: boolean,
-        ignoreWarnings?: boolean,
-        rollbackOnError?: boolean,
-        testLevel?: string,       
+        verbose?: boolean,
+        checkOnly?: boolean
     };
-    overwritePackageXML?: boolean;
     poll?: number;
     pollTimeout?: number;
     prefix?: string;
-    revealTestedClass?: boolean;
+    proxyUrl?: string;
     showFilesOnOpen?: boolean;
     showFilesOnOpenMax?: number;
     showTestCoverage? : boolean;
     showTestLog? : boolean;
     spaDist? : string;
     src?: string;
-    srcDefault?: string;
-    srcs?: {[key: string]: {src: string, url: string}};
     url?: string;
-    username?: string;    
+    username?: string;
+    // workspaceRoot?: string;
 }
 
 export interface MetadataResult {
@@ -156,13 +147,14 @@ export interface IForceService {
     describe: IMetadataDescribe;
     declarations?: IDeclarations;
     containerId?: string;
-    statusTimeout: any;    
+    statusInterval: any;    
     containerMembers: IContainerMember[];
     containerAsyncRequestId?: string;
     conn?: jsforce.Connection;
+    username?: string;
     outputChannel: vscode.OutputChannel;
+    statusBarItem_UserInfo: vscode.StatusBarItem;
     statusBarItem: vscode.StatusBarItem;
-    fcDiagnosticCollection: vscode.DiagnosticCollection;
     connect(context: vscode.ExtensionContext): Promise<IForceService>;
     newContainer(force: Boolean): Promise<IForceService>;
     showStatus(message: string): void;

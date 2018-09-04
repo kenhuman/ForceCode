@@ -2,12 +2,9 @@ import * as vscode from 'vscode';
 import * as commands from './../commands';
 import { updateDecorations } from '../decorators/testCoverageDecorator';
 import { getFileName } from './../parsers';
-import { commandService, commandViewService, codeCovViewService, configuration, switchUserViewService } from './../services';
+import { commandService, commandViewService, codeCovViewService } from './../services';
 import * as path from 'path';
 import { FCFile } from '../services/codeCovView';
-import * as fs from 'fs-extra';
-import { ToolingType } from '../commands/retrieve';
-import { getAnyTTFromFolder, getAnyNameFromUri } from '../parsers/open';
 
 export default [
     {
@@ -39,12 +36,24 @@ export default [
         commandName: 'ForceCode.open',
         name: 'Opening file',
         hidden: false,
-        description: 'Open Classes, Pages, Triggers, Components, Lightning Components, and Static Resources',
+        description: 'Open Classes, Pages, Triggers, Components, and Static Resources',
         detail: 'Retrieve a file from Salesforce.',
         icon: 'desktop-download',
         label: 'Open Salesforce File',
         command: function (context, selectedResource?) {
             return commands.open(context);
+        }
+    },
+    {
+        commandName: 'ForceCode.openAura',
+        name: 'Opening Aura Bundle',
+        hidden: false,
+        description: 'Open an Aura Bundle',
+        detail: 'Retrieve an Aura Bundle from Salesforce.',
+        icon: 'database',
+        label: 'Open Aura Bundle',
+        command: function (context, selectedResource?) {
+            return commands.openAura(context);
         }
     },
     // Create Classes
@@ -145,17 +154,14 @@ export default [
         icon: 'rocket',
         label: 'Compile/Deploy',
         command: function (context, selectedResource?) {
-            if(context) {
-                if(context.uri) {
-                    context = context.uri;
-                }
-                return vscode.workspace.openTextDocument(context)
-                    .then(doc => { return commands.compile(doc); });
+            if(selectedResource && selectedResource.path) {
+                return vscode.workspace.openTextDocument(selectedResource)
+                    .then(doc => commands.compile(doc, context));
             }
             if(!vscode.window.activeTextEditor) {
                 return undefined;
             }
-            return commands.compile(vscode.window.activeTextEditor.document);
+            return commands.compile(vscode.window.activeTextEditor.document, context);
         }
     },
     {
@@ -234,7 +240,7 @@ export default [
         name: 'Refreshing Code Completion',
         hidden: false,
         description: 'Refresh objects from org',
-        detail: 'Generate faux sObject classes for apex code completion using the Salesforce apex plugin.',
+        detail: 'You must login to DX first or if you receive errors. Allows code completion with custom fields and objects by downloading org data.',
         icon: 'code',
         label: 'Code Completion Refresh',
         command: function (context, selectedResource?) {
@@ -250,7 +256,7 @@ export default [
         icon: 'x',
         label: 'Log out of Salesforce',
         command: function (context, selectedResource?) {
-            return vscode.window.forceCode.dxCommands.logout();
+            return commands.dxLogout();
         }
     },
     // Enter Salesforce Credentials
@@ -259,11 +265,11 @@ export default [
         name: 'Logging in',
         hidden: false,
         description: 'Enter the credentials you wish to use.',
-        detail: 'Log into an org not in the saved usernames list.',
+        detail: 'If you are already logged in, you will be logged out of your previous session.',
         icon: 'key',
         label: 'Log in to Salesforce',
         command: function (context, selectedResource?) {
-            return commands.credentials(context);
+            return vscode.window.forceCode.connect(context);
         }
     },
     {
@@ -278,45 +284,25 @@ export default [
         name: 'Retrieving ',
         hidden: true,
         command: function (context, selectedResource?) {
-            if(selectedResource && selectedResource instanceof Array) {
-                var files: ToolingType[] = [];
-                selectedResource.forEach(curRes => {
-                    var tType: string = getAnyTTFromFolder(curRes);
-                    var index: number = getTTIndex(tType, files);
-                    const theName: string = getAnyNameFromUri(curRes);
-                    if(index >= 0) {
-                        if(theName === '*') {
-                            files[index].members = ['*'];
-                        } else {
-                            files[index].members.push(theName);
-                        }
-                    } else {
-                        files.push({name: tType, members: [theName]});
-                    }
-                });
-
-                return commands.retrieve({types: files});
-            }
-            if(context) {
-                return commands.retrieve(context);
+            if(selectedResource && selectedResource.path) {
+                return vscode.workspace.openTextDocument(selectedResource)
+                    .then(doc => commands.retrieve(context, doc.uri));
             }
             if(!vscode.window.activeTextEditor) {
                 return undefined;
             }
-            return commands.retrieve(vscode.window.activeTextEditor.document.uri);
-
-            function getTTIndex(toolType: string, arr: ToolingType[]): number {
-                return arr.findIndex(cur => {
-                    return cur.name === toolType && cur.members !== ['*'];
-                });
-            }
+            return commands.retrieve(context, vscode.window.activeTextEditor.document.uri);
         }
     },
     {
         commandName: 'ForceCode.showMenu',
         hidden: true,
         command: function (context, selectedResource?) {
-            return commands.showMenu(context);
+            if(vscode.window.forceCode.dxCommands.isLoggedIn) {
+                return commands.showMenu(context);
+            } else {
+                return Promise.resolve();
+            }
         }
     },
     {
@@ -349,14 +335,24 @@ export default [
         commandName: 'ForceCode.openFileInOrg',
         hidden: true,
         command: function(context, selectedResource?) {
-            if(context) {
-                var filePath = context.fsPath;
-                const fcfile: FCFile = codeCovViewService.findByPath(filePath);
-                
-                return vscode.window.forceCode.dxCommands.openOrgPage('/' + fcfile.getWsMember().id);
-            } else {
-                return Promise.resolve();
-            }
+            var filePath = context.fsPath;
+            const fcfile: FCFile = codeCovViewService.findByPath(filePath);
+            
+            return vscode.window.forceCode.dxCommands.openOrgPage('/' + fcfile.getWsMember().id);
+        }
+    },
+    {
+        commandName: 'sfdx.force.apex.test.class.run.delegate',
+        hidden: true,
+        command: function (context, selectedResource?) {
+            return commandService.runCommand('ForceCode.apexTest', context, 'class');
+        }
+    },
+    {
+        commandName: 'sfdx.force.apex.test.method.run.delegate',
+        hidden: true,
+        command: function (context, selectedResource?) {
+            return commandService.runCommand('ForceCode.apexTest', context, 'method');
         }
     },
     {
@@ -364,7 +360,7 @@ export default [
         name: 'Opening file',
         hidden: true,
         command: function (context, selectedResource?) {
-            return commands.showFileOptions(context);
+            return commands.showFileOptions(context, true);
         }
     },
     {
@@ -383,7 +379,7 @@ export default [
             return vscode.workspace.openTextDocument(context).then(theDoc => {
                 return vscode.window.showWarningMessage(selectedResource + ' has changed ' + getFileName(theDoc), 'Refresh', 'Diff', 'Dismiss').then(s => {
                     if (s === 'Refresh') {
-                        return commands.retrieve(theDoc.uri);
+                        return commands.retrieve(undefined, theDoc.uri);
                     } else if(s === 'Diff') {
                         return commands.diff(theDoc);
                     }
@@ -405,6 +401,14 @@ export default [
         hidden: true,
         command: function (context, selectedResource?) {
             return vscode.window.forceCode.checkForFileChanges();
+        }
+    },
+    {
+        commandName: 'ForceCode.getOrgInfo',
+        name: 'Getting org info',
+        hidden: true,
+        command: function (context, selectedResource?) {
+            return vscode.window.forceCode.dxCommands.getOrgInfo();
         }
     },
     {
@@ -438,77 +442,6 @@ export default [
         hidden: true,
         command: function (context, selectedResource?) {
             return commands.apexTestResults();
-        }
-    },
-    {
-        commandName: 'ForceCode.runTests', //'sfdx.force.apex.test.class.run.delegate',
-        hidden: true,
-        command: function (context, selectedResource?) {
-            return commandService.runCommand('ForceCode.apexTest', context.name, context.type);
-        }
-    },
-    {
-        commandName: 'ForceCode.switchUser',
-        hidden: true,
-        command: function (context, selectedResource?) {
-            return commandService.runCommand('ForceCode.switchUserText', context, selectedResource);
-        }
-    },
-    {
-        commandName: 'ForceCode.switchUserText',
-        name: 'Switching user',
-        hidden: true,
-        command: function (context, selectedResource?) {
-            switchUserViewService.orgInfo = context;
-            vscode.window.forceCode.config.url = context.loginUrl;
-            vscode.window.forceCode.config.username = context.username;
-            const srcs: {[key: string]: {src: string, url: string}} = vscode.window.forceCode.config.srcs;
-            if(srcs && srcs[context.username]) {
-                vscode.window.forceCode.config.src = srcs[context.username].src;
-            } else {
-                const srcDefault: string = vscode.window.forceCode.config.srcDefault;
-                vscode.window.forceCode.config.src = srcDefault ? srcDefault : 'src';
-            }
-            const projPath: string = `${vscode.workspace.workspaceFolders[0].uri.fsPath}${path.sep}`;
-            vscode.window.forceCode.workspaceRoot = `${projPath}${vscode.window.forceCode.config.src}`;
-            if (!fs.existsSync(vscode.window.forceCode.workspaceRoot)) {
-                fs.mkdirpSync(vscode.window.forceCode.workspaceRoot);
-            }
-            if(context.username) {
-                if (!fs.existsSync(projPath + '.forceCode' + path.sep + context.username + path.sep + '.sfdx')) {
-                    fs.mkdirpSync(projPath + '.forceCode' + path.sep + context.username + path.sep + '.sfdx');
-                }
-                if(fs.existsSync(`${projPath}.sfdx`)) {
-                    fs.removeSync(`${projPath}.sfdx`);
-                }
-                fs.symlinkSync(projPath + '.forceCode' + path.sep + context.username + path.sep + '.sfdx', `${projPath}.sfdx`, 'junction');
-            }
-            vscode.window.forceCode.conn = undefined;
-            codeCovViewService.clear();
-            return vscode.window.forceCode.dxCommands.getOrgInfo().then(res => {
-                return fs.outputFile(projPath + 'force.json', JSON.stringify(vscode.window.forceCode.config, undefined, 4), function() {
-                    if(res) {
-                        return commandService.runCommand('ForceCode.connect', undefined);
-                    } 
-                    return Promise.resolve(res);
-                });
-            }, err => {
-                console.log('Not logged into this org');
-                return vscode.window.forceCode.dxCommands.logout().then(() => {
-                    return commandService.runCommand('ForceCode.enterCredentials', selectedResource);
-                });
-                
-            });
-        }
-    },
-    {
-        commandName: 'ForceCode.login',
-        hidden: true,
-        command: function (context, selectedResource?) {
-            return vscode.window.forceCode.dxCommands.login(context.loginUrl)
-                .then(res => {
-                    return Promise.resolve(configuration());
-                });
         }
     },
 ]
