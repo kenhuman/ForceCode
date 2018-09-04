@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import fs = require('fs-extra');
 import path = require('path');
 import { configuration } from './../services';
+import constants from './../models/constants';
 
 export default function createClass() {
     const CUSTOM_CLASS: string = 'Custom';
@@ -85,8 +86,9 @@ export default function createClass() {
     }
 
     function generateFile(classname) {
-        //return Promise.all([writeFile(), writeMetaFile()]);
-        return Promise.all([writeFile()]);
+		
+		return Promise.all([writeFile(), writeMetaFile()]);
+		
         function writeFile() {
             return new Promise(function (resolve, reject) {
                 // Write Class file
@@ -114,42 +116,36 @@ export default function createClass() {
                 });
             });
         }
-        /*
+
         // Write Metadata file
         function writeMetaFile() {
             var finalMetadataName: string = classesPath + path.sep + classname + '.cls-meta.xml';
             return new Promise(function (resolve, reject) {
                 fs.stat(finalMetadataName, function (err, stats) {
                     if (!err) {
-                        vscode.window.forceCode.statusBarItem.text = 'ForceCode: Error creating file';
                         vscode.window.showErrorMessage('Cannot create ' + finalMetadataName + '. A file with that name already exists!');
                     } else if (err.code === 'ENOENT') {
 
                         var metaFile: string = `<?xml version="1.0" encoding="UTF-8"?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
-    <apiVersion>${config.apiVersion || vscode.window.forceCode.conn.version || '37.0'}</apiVersion>
+    <apiVersion>${vscode.window.forceCode.config.apiVersion || vscode.window.forceCode.conn.version || constants.API_VERSION}</apiVersion>
     <status>Active</status>
 </ApexClass>`;
 
                         fs.outputFile(finalMetadataName, metaFile, function (writeError) {
                             if (writeError) {
-                                vscode.window.forceCode.statusBarItem.text = 'ForceCode: ' + writeError.message;
                                 vscode.window.showErrorMessage(writeError.message);
                                 reject(err);
                             }
                             resolve(finalMetadataName);
                         });
                     } else {
-                        vscode.window.forceCode.statusBarItem.text = 'ForceCode: ' + err.code;
                         reject(err);
                     }
-                    vscode.window.forceCode.resetMenu();
                 });
 
             });
         }
-        */
-
 
     }
 

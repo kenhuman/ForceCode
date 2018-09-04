@@ -1,38 +1,34 @@
 import * as vscode from 'vscode';
 import fs = require('fs-extra');
 import * as path from 'path';
-import * as parsers from './../parsers';
-import { IWorkspaceMember } from '../forceCode';
 import constants from './../models/constants';
-import { commandService, codeCovViewService } from '../services';
-import { FCFile } from '../services/codeCovView';
+import { commandService, codeCovViewService, switchUserViewService } from '../services';
+import { getToolingTypeFromExt } from '../parsers/getToolingType';
+import { IWorkspaceMember } from '../forceCode';
+import { FCOauth } from '../services/switchUserView';
+import { getAnyTTFromFolder } from '../parsers/open';
+const mime = require('mime-types');
 const fetch: any = require('node-fetch');
 const ZIP: any = require('zip');
 const parseString: any = require('xml2js').parseString;
-var tools: any = require('jsforce-metadata-tools');
 
-export default function retrieve(context: vscode.ExtensionContext, resource?: vscode.Uri) {
+export interface ToolingType {
+    name: string;
+    members: string[];
+}
+
+export interface ToolingTypes {
+    types: ToolingType[];
+}
+
+export default function retrieve(resource?: vscode.Uri | ToolingTypes) {
+    const errMessage: string = 'Either the file/metadata type doesn\'t exist in the current org or you\'re trying to retrieve outside of '
+        + vscode.window.forceCode.workspaceRoot;
     let option: any;
-    const _consoleInfoReference: any = console.info;
-    const _consoleErrorReference: any = console.error;
-    const _consoleLogReference: any = console.log;
-    const statsPath: string = `${vscode.workspace.workspaceFolders[0].uri.fsPath}${path.sep}RetrieveStatistics.log`;
-    var logger: any = (function (fs) {
-        var buffer: string = '';
-        return {
-            log: log,
-            flush: flush,
-        };
-        function log(val) {
-            buffer += (val + '\n');
-            vscode.window.forceCode.outputChannel.appendLine(val);
-        }
-        function flush() {
-            var logFile: any = path.resolve(statsPath);
-            fs.writeFileSync(logFile, buffer);//, 'utf8');
-            buffer = '';
-        }
-    }(fs));
+    var newWSMembers: IWorkspaceMember[] = [];
+    var toolTypes: Array<{}> = [];
+    var typeNames: Array<string> = [];
+
     return Promise.resolve(vscode.window.forceCode)
         .then(showPackageOptions)
         .then(getPackage)
@@ -44,10 +40,11 @@ export default function retrieve(context: vscode.ExtensionContext, resource?: vs
     // =======================================================================================================================================
 
     function getPackages() {
-        var requestUrl: string = vscode.window.forceCode.dxCommands.orgInfo.instanceUrl + '/_ui/common/apex/debug/ApexCSIAPI';
+        var orgInfo: FCOauth = switchUserViewService.orgInfo;
+        var requestUrl: string = orgInfo.instanceUrl + '/_ui/common/apex/debug/ApexCSIAPI';
         var headers: any = {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Cookie': 'sid=' + vscode.window.forceCode.dxCommands.orgInfo.accessToken,
+            'Cookie': 'sid=' + orgInfo.accessToken,
         };
         var body: string = 'action=EXTENT&extent=PACKAGES';
         return fetch(requestUrl, { method: 'POST', headers, body }).then(function (response) {
@@ -69,7 +66,7 @@ export default function retrieve(context: vscode.ExtensionContext, resource?: vs
     }
 
     function showPackageOptions() {
-        if (resource !== undefined) { return undefined; }
+        if (resource !== undefined) { return Promise.resolve(); }
         return getPackages().then(packages => {
             let options: vscode.QuickPickItem[] = packages
                 .map(pkg => {
@@ -129,7 +126,7 @@ export default function retrieve(context: vscode.ExtensionContext, resource?: vs
             return vscode.window.showQuickPick(options, config);
         }).then(function (res) {
             if(!res) {
-                return;
+                return Promise.reject();
             }
             if (res.description === 'manual') {
                 return vscode.window.showInputBox({
@@ -149,146 +146,46 @@ export default function retrieve(context: vscode.ExtensionContext, resource?: vs
     function getPackage(opt: vscode.QuickPickItem) {
         option = opt;
         // Proxy Console.info to capture the status output from metadata tools
-        registerProxy();
         vscode.window.forceCode.conn.metadata.pollTimeout = (vscode.window.forceCode.config.pollTimeout || 600) * 1000;
 
         if (opt) {
             return new Promise(pack);
         } else if (resource) {
             return new Promise(function (resolve) {
-                vscode.window.forceCode.conn.metadata.describe().then(describe => {
-                    // Get the Metadata Object type
-                    // let extension: string = resource.fsPath.slice(resource.fsPath.lastIndexOf('.')).replace('.', '');
-                    var isDirectory: Boolean = fs.lstatSync(resource.fsPath).isDirectory();
-                    if (isDirectory) {
-                        var baseDirectoryName: string = path.parse(resource.fsPath).name;
-                        var types: any[] = describe.metadataObjects
-                            .filter(o => o.directoryName === baseDirectoryName)
-                            .map(r => {
-                                return { name: r.xmlName, members: '*' };
-                            });
-
-                        if (types.length <= 0) {
-                            types = getAuraBundle(describe);
-                        }
-
-                        if (types.length > 0) {
-                            retrieveComponents(resolve, types);
-                        }
+                // Get the Metadata Object type
+                if (resource instanceof vscode.Uri && fs.lstatSync(resource.fsPath).isDirectory()) {
+                    var baseDirectoryName: string = path.parse(resource.fsPath).name;
+                    var type: string = getAnyTTFromFolder(resource);
+                    if(!type) {
+                        throw new Error(errMessage);
                     }
-                    else {
-
-                        let extension: string = path.extname(resource.fsPath).replace('.', '');
-                        var metadataTypes: any[] = describe.metadataObjects
-                            .filter(o => o.suffix === extension);
-
-                        // var 
-
-                        vscode.workspace.openTextDocument(resource).then(doc => {
-                            var toolingType = parsers.getToolingType(doc)
-                            const name: string = parsers.getName(doc, toolingType);
-                            if (toolingType === 'AuraDefinition') {
-                                var types: any[] = describe.metadataObjects
-                                    .filter(o => o.xmlName === 'AuraDefinitionBundle')
-                                    .map(r => {
-                                        return { name: r.xmlName, members: name };
-                                    });
-
-                                resolve(vscode.window.forceCode.conn.metadata.retrieve({
-                                    unpackaged: { types: types },
-                                    apiVersion: vscode.window.forceCode.config.apiVersion || constants.API_VERSION,
-                                }).stream());
-                            }
-                            else {
-                                var listTypes: any[] = metadataTypes
-                                    .map(o => {
-                                        return {
-                                            type: o.xmlName,
-                                            folder: o.directoryName,
-                                        };
-                                    });
-
-                                var retrieveTypes: any[] = metadataTypes
-                                    .map(o => {
-                                        return {
-                                            name: o.xmlName,
-                                            members: '*',
-                                        };
-                                    });
-                                // List the Metadata by that type
-                                return vscode.window.forceCode.conn.metadata.list(listTypes).then(res => {
-                                    let fileName: string = resource.fsPath.slice(resource.fsPath.lastIndexOf(path.sep) + 1);
-                                    var files: string[] = [];
-                                    var workspaceMember: IWorkspaceMember;
-                                    // Match the metadata against the filepath
-                                    if (Array.isArray(res)) {
-                                        files = res.filter(t => {
-                                            return t.fileName.match(fileName);
-                                            // let r: string = '\\' + path.sep + '(' + vscode.window.forceCode.config.prefix + ')*' + '(\\\_\\\_)*' + fileName;
-                                            // return t.fileName.match(new RegExp(r, 'i'));
-                                        }).map(t => {
-                                            // update the metadata here since we're fetching the file. will help make sure the metadata doesn't become stale.
-                                            // if it already exists it will just be overwritten
-                                            workspaceMember = {
-                                                name: t.fullName,
-                                                path: resource.fsPath,
-                                                id: t.id, 
-                                                lastModifiedDate: t.lastModifiedDate,
-                                                lastModifiedByName: t.lastModifiedByName,
-                                                lastModifiedById: t.lastModifiedById,
-                                                type: t.type,
-                                            };
-                                            const fcfile: FCFile = codeCovViewService.findById(t.id);
-                                            codeCovViewService.addOrUpdateClass(workspaceMember);
-                                            commandService.runCommand('ForceCode.getCodeCoverage', undefined, undefined);
-                                            return t.fileName;
-                                        });
-                                    } else if (typeof res === 'object') {
-                                        workspaceMember = {
-                                            name: res['fullName'],
-                                            path: resource.fsPath,
-                                            id: res['id'], 
-                                            lastModifiedDate: res['lastModifiedDate'],
-                                            lastModifiedByName: res['lastModifiedByName'],
-                                            lastModifiedById: res['lastModifiedById'],
-                                            type: res['type'],
-                                        };
-                                        const fcfile: FCFile = codeCovViewService.findById(res['id']);
-                                        codeCovViewService.addOrUpdateClass(workspaceMember);
-                                        commandService.runCommand('ForceCode.getCodeCoverage', undefined, undefined);
-                                        files.push(res['fileName']);
-                                    }
-
-                                    // Retrieve the file by it's name
-                                    resolve(vscode.window.forceCode.conn.metadata.retrieve({
-                                        singlePackage: true,
-                                        specificFiles: files,
-                                        unpackaged: { types: retrieveTypes },
-                                        apiVersion: vscode.window.forceCode.config.apiVersion || constants.API_VERSION,
-                                    }).stream());
-                                });
-                            }
-                        });
+                    var types: any[] = [];
+                    if (type === 'AuraDefinitionBundle') {
+                        if(baseDirectoryName === 'aura') {
+                            baseDirectoryName = '*';
+                        }
+                        types = [{ name: type, members: baseDirectoryName }];
+                    } else {
+                        types = [{ name: type, members: '*' }];
                     }
-                });
+                    retrieveComponents(resolve, {types: types});
+                } else if(resource instanceof vscode.Uri){
+                    var toolingType: string = getAnyTTFromFolder(resource);
+                    if(!toolingType) {
+                        throw new Error(errMessage);
+                    }
+                    const name: string = path.parse(resource.fsPath).name;
+                    retrieveComponents(resolve, {types: [{name: toolingType, members: [name]}]});
+                } else {
+                    retrieveComponents(resolve, resource);
+                }
             });
         }
-        return undefined;
+        throw new Error();
 
-        function getAuraBundle(describe): any[] {
-            // if nothing was found, then check if this is an AURA componet...
-            var baseDirectoryName: string = parsers.getAuraNameFromFileName(resource.fsPath);
-            var types: any[] = describe.metadataObjects
-                .filter(o => o.xmlName === 'AuraDefinitionBundle')
-                .map(r => {
-                    return { name: r.xmlName, members: baseDirectoryName };
-                });
-            return types;
-        }
-
-        function retrieveComponents(resolve, types) {
+        function retrieveComponents(resolve, retrieveTypes: ToolingTypes) {
             resolve(vscode.window.forceCode.conn.metadata.retrieve({
-                unpackaged: { types: types },
+                unpackaged: retrieveTypes,
                 apiVersion: vscode.window.forceCode.config.apiVersion || constants.API_VERSION,
             }).stream());
         }
@@ -313,30 +210,19 @@ export default function retrieve(context: vscode.ExtensionContext, resource?: vs
             }
 
             function all() {
-                vscode.window.forceCode.conn.metadata.describe().then(res => {
-                    var types: any[] = res.metadataObjects.map(r => {
-                        return { name: r.xmlName, members: '*' };
-                    });
-                    resolve(vscode.window.forceCode.conn.metadata.retrieve({
-                        unpackaged: { types: types },
-                        apiVersion: vscode.window.forceCode.config.apiVersion || constants.API_VERSION,
-                    }).stream());
+                var types: any[] = vscode.window.forceCode.describe.metadataObjects.map(r => {
+                    return { name: r.xmlName, members: '*' };
                 });
+                retrieveComponents(resolve, {types: types});
             }
 
             function getSpecificTypeMetadata(metadataType: string) {
-                vscode.window.forceCode.conn.metadata.describe().then(res => {
-                    var types: any[] = res.metadataObjects
-                        .filter(o => o.xmlName === metadataType)
-                        .map(r => {
-                            return { name: r.xmlName, members: '*' };
-                        });
-
-                    resolve(vscode.window.forceCode.conn.metadata.retrieve({
-                        unpackaged: { types: types },
-                        apiVersion: vscode.window.forceCode.config.apiVersion || constants.API_VERSION,
-                    }).stream());
-                });
+                var types: any[] = vscode.window.forceCode.describe.metadataObjects
+                    .filter(o => o.xmlName === metadataType)
+                    .map(r => {
+                        return { name: r.xmlName, members: '*' };
+                    });
+                retrieveComponents(resolve, {types: types});
             }
 
             function unpackaged() {
@@ -384,8 +270,61 @@ export default function retrieve(context: vscode.ExtensionContext, resource?: vs
                             name = path.normalize(name).replace(option.description + path.sep, '');
                         }
                         name = path.normalize(name).replace('unpackaged' + path.sep, '');
-                        if (name != 'package.xml' && name.search('meta.xml') < 0) {
+                        if(name !== 'package.xml' || vscode.window.forceCode.config.overwritePackageXML) {
                             fs.outputFileSync(`${vscode.window.forceCode.workspaceRoot}${path.sep}${name}`, data);
+                        }
+                        var tType: string = getToolingTypeFromExt(name);
+                        if(tType) {
+                            // add to ws members
+                            var wsMem: IWorkspaceMember = {
+                                name: name.split(path.sep).pop().split('.')[0],
+                                path: `${vscode.window.forceCode.workspaceRoot}${path.sep}${name}`,
+                                id: '',//metadataFileProperties.id,
+                                lastModifiedDate: '',//metadataFileProperties.lastModifiedDate,
+                                lastModifiedByName: '',
+                                lastModifiedById: '',
+                                type: tType,
+                            }
+
+                            newWSMembers.push(wsMem);
+
+                            if(!typeNames.includes(tType)) {
+                                typeNames.push(tType);
+                                toolTypes.push({type: tType});
+                            }
+                        }
+                        if(name.endsWith('.resource-meta.xml')) {
+                            // unzip the resource
+                            parseString(data, { explicitArray: false }, function (err, dom) {
+                                if (!err) {
+                                    var actualResData = fs.readFileSync(`${vscode.window.forceCode.workspaceRoot}${path.sep}${name}`.split('-meta.xml')[0]);
+                                    var ContentType: string = dom.StaticResource.contentType;
+                                    var ctFolderName = ContentType.split('/').join('.');
+                                    const resFN: string = name.slice(name.indexOf(path.sep) + 1).split('.')[0];
+                                    if(ContentType.includes('zip')) {
+                                        var zipReader: any[] = ZIP.Reader(new Buffer(actualResData));
+                                        zipReader.forEach(function (zipEntry) {
+                                            if (zipEntry.isFile()) {
+                                                var zipFName: string = zipEntry.getName();
+                                                var zipFData: Buffer = zipEntry.getData();
+                                                var filePath: string = `${vscode.window.forceCode.workspaceRoot}${path.sep}resource-bundles${path.sep}${resFN}.resource.${ctFolderName}${path.sep}${zipFName}`;
+                                                fs.outputFileSync(filePath, zipFData);
+                                            }
+                                        });
+                                    } else {
+                                        // this will work for most other things...
+                                        var theData: any;
+                                        if(ContentType.includes('image') || ContentType.includes('shockwave-flash')) {
+                                            theData = new Buffer(actualResData.toString('base64'), 'base64');
+                                        } else {
+                                            theData = actualResData.toString(mime.charset(ContentType) || 'UTF-8');
+                                        }
+                                        var ext = mime.extension(ContentType);
+                                        var filePath: string = `${vscode.window.forceCode.workspaceRoot}${path.sep}resource-bundles${path.sep}${resFN}.resource.${ctFolderName}${path.sep}${resFN}.${ext}`;
+                                        fs.outputFileSync(filePath, theData);
+                                    }
+                                }
+                            });
                         }
                     }
                 });
@@ -396,52 +335,85 @@ export default function retrieve(context: vscode.ExtensionContext, resource?: vs
     // =======================================================================================================================================
     // =======================================================================================================================================
     // =======================================================================================================================================
-    function finished(res): boolean {
+    function finished(res): Promise<any> {
         if (res.success) {
-            setTimeout(function () {
+            var getCodeCov: boolean = false;
+            console.log('Done retrieving files');
+            // check the metadata and add the new members
+            return updateWSMems().then(() => {
                 if (option) {
                     vscode.window.forceCode.showStatus(`Retrieve ${option.description} $(thumbsup)`);
                 } else {
                     vscode.window.forceCode.showStatus(`Retrieve $(thumbsup)`);
                 }
-            }, 100);
+                return Promise.resolve(res);
+            });
+            
+            function updateWSMems(): Promise<any> {
+                if(toolTypes.length > 0) {
+                    var theTypes: {[key: string]: Array<any>} = {};
+    
+                    theTypes['type0'] = toolTypes;
+                    if(theTypes['type0'].length > 3) {
+                        for(var i = 1; theTypes['type0'].length > 3; i++) {
+                            theTypes['type' + i] = theTypes['type0'].splice(0, 3);
+                        }
+                    }
+                    let proms = Object.keys(theTypes).map(curTypes => {
+                        const shouldGetCoverage = theTypes[curTypes].find(cur => {return cur.type === 'ApexClass' || cur.type === 'ApexTrigger';});
+                        if(shouldGetCoverage) {
+                            getCodeCov = true;
+                        }
+                        return vscode.window.forceCode.conn.metadata.list(theTypes[curTypes]);
+                    });
+                    return Promise.all(proms).then(rets => {
+                        return parseRecords(rets);
+                    });
+                } else {
+                    return Promise.resolve();
+                }
+            }
+    
+            function parseRecords(recs: any[]): Promise<any> {
+                console.log('Done retrieving metadata records');
+                recs.some(curSet => {
+                    return curSet.some(key => {
+                        if(newWSMembers.length > 0) {
+                            var index: number = newWSMembers.findIndex(curMem => {
+                                return curMem.name === key.fullName && curMem.type === key.type;
+                            });
+                            if(index >= 0) {
+                                newWSMembers[index].id = key.id;
+                                newWSMembers[index].lastModifiedDate = key.lastModifiedDate;
+                                newWSMembers[index].lastModifiedByName = key.lastModifiedByName; 
+                                newWSMembers[index].lastModifiedById = key.lastModifiedById;
+                                codeCovViewService.addClass(newWSMembers.splice(index, 1)[0], true);
+                            }
+                        } else {
+                            return true;
+                        }
+                    });
+                });
+                console.log('Done updating/adding metadata');
+                if(getCodeCov) {
+                    return commandService.runCommand('ForceCode.getCodeCoverage', undefined, undefined).then(() => {
+                        console.log('Done retrieving code coverage');
+                        return Promise.resolve();
+                    });
+                } else {
+                    return Promise.resolve();
+                }
+            }
         } else {
-            setTimeout(function () {
-                vscode.window.showErrorMessage('Retrieve Errors');
-            }, 100);
+            vscode.window.showErrorMessage('Retrieve Errors');
         }
-        tools.reportRetrieveResult(res, logger, vscode.window.forceCode.config.deployOptions.verbose);
-        logger.flush();
-        unregisterProxy();
-        return res;
+        vscode.window.forceCode.outputChannel.append(vscode.window.forceCode.dxCommands.outputToString(res).replace(/{/g, '').replace(/}/g, ''));
+        return Promise.resolve(res);
     }
     function onError(err) {
-        unregisterProxy();
-        setTimeout(function () {
-            vscode.window.showErrorMessage('Retrieve Errors');
-        }, 100);
-        return vscode.window.showErrorMessage(err.message);
+        if(err) {
+            vscode.window.showErrorMessage('Retrieve Errors\n' + err.message);
+        }
     }
     // =======================================================================================================================================
-    function registerProxy() {
-        console.info = function () {
-            var msg: string = arguments[0];
-            vscode.window.forceCode.outputChannel.appendLine(msg);
-            return _consoleInfoReference.apply(this, arguments);
-        };
-        console.log = function () {
-            return _consoleLogReference.apply(this, arguments);
-        };
-        console.error = function () {
-            if (!arguments[0].match(/DeprecationWarning\:/)) {
-                vscode.window.forceCode.outputChannel.appendLine(arguments[0]);
-            }
-            return _consoleErrorReference.apply(this, arguments);
-        };
-    }
-    function unregisterProxy() {
-        console.info = _consoleInfoReference;
-        console.log = _consoleLogReference;
-        console.error = _consoleErrorReference;
-    }
 }
